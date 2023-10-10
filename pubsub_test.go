@@ -11,7 +11,7 @@ import (
 
 func TestPubsub(t *testing.T) {
 	t.Run("two listeners", func(t *testing.T) {
-		pub := pubsub.NewPublisher[int]()
+		pub := pubsub.New[int]()
 		var got1, got2 int
 		pub.Subscribe(func(v int) {
 			t.Logf("got1: %d", v)
@@ -33,7 +33,7 @@ func TestPubsub(t *testing.T) {
 		type mystruct struct {
 			a int
 		}
-		pub := pubsub.NewPublisher[*mystruct]()
+		pub := pubsub.New[*mystruct]()
 		pub.Subscribe(func(v *mystruct) {
 			v.a = 1
 		})
@@ -46,7 +46,7 @@ func TestPubsub(t *testing.T) {
 	})
 	t.Run("unsubscribe", func(t *testing.T) {
 		var got1, got2 int
-		pub := pubsub.NewPublisher[int]()
+		pub := pubsub.New[int]()
 		pub.Subscribe(func(v int) { got1 = v })
 		s := pub.Subscribe(func(v int) { got2 = v })
 		s.Unsubscribe()
@@ -62,7 +62,7 @@ func TestPubsub(t *testing.T) {
 			counter int
 			mu      sync.Mutex
 		)
-		pub := pubsub.NewPublisher[int]()
+		pub := pubsub.New[int]()
 		for i := 0; i < 1000; i++ {
 			pub.Subscribe(func(v int) {
 				mu.Lock()
@@ -79,7 +79,7 @@ func TestPubsub(t *testing.T) {
 		}
 	})
 	t.Run("close publisher", func(t *testing.T) {
-		pub := pubsub.NewPublisher[int]()
+		pub := pubsub.New[int]()
 		var got int
 		pub.Subscribe(func(v int) {
 			got = v

@@ -50,7 +50,7 @@ func (p *publisher[T]) listen() {
 	}
 }
 
-func NewPublisher[T any]() *publisher[T] {
+func New[T any]() *publisher[T] {
 	p := &publisher[T]{
 		unsubs: make(chan chan T, 5),
 	}
@@ -112,4 +112,9 @@ func (p *publisher[T]) Publish(v T) error {
 		sub.ev <- v
 	}
 	return nil
+}
+func (p *publisher[T]) SubscriptionCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.subs)
 }
