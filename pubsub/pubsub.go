@@ -11,24 +11,24 @@ var (
 	ErrClosed = errors.New("pubsub: closed")
 )
 
-type subscription[T any] struct {
+type subscriber[T any] struct {
 	c       subscriptionCloseFunc
 	ev      chan T
 	handler func(v T)
 	mu      sync.Mutex
 }
 
-func (s *subscription[T]) Unsubscribe() {
+func (s *subscriber[T]) Unsubscribe() {
 	s.c()
 }
-func (s *subscription[T]) listen() {
+func (s *subscriber[T]) listen() {
 	for e := range s.ev {
 		s.handler(e)
 	}
 }
 
 type publisher[T any] struct {
-	subs   []*subscription[T]
+	subs   []*subscriber[T]
 	unsubs chan chan T
 	mu     sync.Mutex
 	closed bool
@@ -54,17 +54,17 @@ func New[T any]() *publisher[T] {
 	return p
 }
 
-type subscribeOpt[T any] func(*subscription[T])
+type subscribeOpt[T any] func(*subscriber[T])
 
 func ChannelCapacity[T any](n int) subscribeOpt[T] {
-	return func(s *subscription[T]) {
+	return func(s *subscriber[T]) {
 		s.ev = make(chan T, n)
 	}
 }
 
-func (p *publisher[T]) Subscribe(handler func(v T), opts ...subscribeOpt[T]) *subscription[T] {
+func (p *publisher[T]) Subscribe(handler func(v T), opts ...subscribeOpt[T]) *subscriber[T] {
 	ev := make(chan T)
-	s := subscription[T]{
+	s := subscriber[T]{
 		handler: handler,
 		ev:      ev,
 	}
