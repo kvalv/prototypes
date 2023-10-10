@@ -1,7 +1,7 @@
 package pubsubdemo
 
 import (
-	"fmt"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -78,5 +78,19 @@ func TestPubsub(t *testing.T) {
 			t.Errorf("counter = %d; want 10", counter)
 		}
 	})
-
+	t.Run("close publisher", func(t *testing.T) {
+		pub := pubsub.NewPublisher[int]()
+		var got int
+		pub.Subscribe(func(v int) {
+			got = v
+		})
+		pub.Close()
+		if err := pub.Publish(1); !errors.Is(err, pubsub.ErrClosed) {
+			t.Errorf("err = %v; want '%s'", err, pubsub.ErrClosed)
+		}
+		time.Sleep(10 * time.Millisecond)
+		if got != 0 {
+			t.Errorf("got = %d; want 0", got)
+		}
+	})
 }

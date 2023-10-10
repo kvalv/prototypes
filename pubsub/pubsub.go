@@ -1,10 +1,15 @@
 package pubsub
 
 import (
+	"errors"
 	"sync"
 )
 
 type subscriptionCloseFunc func()
+
+var (
+	ErrClosed = errors.New("pubsub: closed")
+)
 
 type subscription[T any] struct {
 	c       subscriptionCloseFunc
@@ -26,6 +31,7 @@ type publisher[T any] struct {
 	subs   []*subscription[T]
 	unsubs chan chan T
 	mu     sync.Mutex
+	closed bool
 }
 
 func (p *publisher[T]) listen() {
@@ -66,9 +72,9 @@ func (p *publisher[T]) Subscribe(handler func(v T), opts ...subscribeOpt[T]) *su
 		handler: handler,
 		ev:      ev,
 	}
-    for _, opt := range opts {
-        opt(&s)
-    }
+	for _, opt := range opts {
+		opt(&s)
+	}
 	closer := func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
@@ -94,11 +100,16 @@ func (p *publisher[T]) Close() {
 	}
 	p.subs = nil
 	close(p.unsubs)
+	p.closed = true
 }
-func (p *publisher[T]) Publish(v T) {
+func (p *publisher[T]) Publish(v T) error {
+	if p.closed {
+		return ErrClosed
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for _, sub := range p.subs {
 		sub.ev <- v
 	}
+	return nil
 }
