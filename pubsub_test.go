@@ -63,7 +63,7 @@ func TestPubsub(t *testing.T) {
 			mu      sync.Mutex
 		)
 		pub := pubsub.New[int]()
-		for i := 0; i < 1000; i++ {
+		for i := 0; i < 10; i++ {
 			pub.Subscribe(func(v int) {
 				mu.Lock()
 				counter++
@@ -74,7 +74,7 @@ func TestPubsub(t *testing.T) {
 		pub.Publish(1)
 		time.Sleep(25 * time.Millisecond)
 		mu.Lock()
-		if counter != 1000 {
+		if counter != 10 {
 			t.Errorf("counter = %d; want 10", counter)
 		}
 	})

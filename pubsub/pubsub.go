@@ -34,27 +34,23 @@ type publisher[T any] struct {
 	closed bool
 }
 
+func (p *publisher[T]) listening() bool { return p.unsubs != nil }
+
 func (p *publisher[T]) listen() {
-	for {
-		select {
-		case c := <-p.unsubs:
-			p.mu.Lock()
-			for i, sub := range p.subs {
-				if sub.ev == c {
-					p.subs = append(p.subs[:i], p.subs[i+1:]...)
-					break
-				}
+	for c := range p.unsubs {
+		p.mu.Lock()
+		for i, sub := range p.subs {
+			if sub.ev == c {
+				p.subs = append(p.subs[:i], p.subs[i+1:]...)
+				break
 			}
-			p.mu.Unlock()
 		}
+		p.mu.Unlock()
 	}
 }
 
 func New[T any]() *publisher[T] {
-	p := &publisher[T]{
-		unsubs: make(chan chan T, 5),
-	}
-	go p.listen()
+	p := &publisher[T]{}
 	return p
 }
 
@@ -74,6 +70,11 @@ func (p *publisher[T]) Subscribe(handler func(v T), opts ...subscribeOpt[T]) *su
 	}
 	for _, opt := range opts {
 		opt(&s)
+	}
+	if !p.listening() {
+		// allocate the channel now because we have at least one subscriber
+		p.unsubs = make(chan chan T, 5)
+		go p.listen()
 	}
 	closer := func() {
 		s.mu.Lock()
@@ -99,7 +100,9 @@ func (p *publisher[T]) Close() {
 		sub.Unsubscribe()
 	}
 	p.subs = nil
-	close(p.unsubs)
+	if p.unsubs != nil {
+		close(p.unsubs)
+	}
 	p.closed = true
 }
 func (p *publisher[T]) Publish(v T) error {
