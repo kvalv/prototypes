@@ -93,4 +93,22 @@ func TestPubsub(t *testing.T) {
 			t.Errorf("got = %d; want 0", got)
 		}
 	})
+	t.Run("subscription count", func(t *testing.T) {
+		pub := pubsub.New[int]()
+		s := pub.Subscribe(func(v int) {})
+		pub.Subscribe(func(v int) {})
+		pub.Subscribe(func(v int) {})
+		if n := pub.SubscriptionCount(); n != 3 {
+			t.Errorf("n = %d; want 3", n)
+		}
+		s.Unsubscribe()
+        time.Sleep(10 * time.Millisecond)
+		if n := pub.SubscriptionCount(); n != 2 {
+			t.Errorf("n = %d; want 2", n)
+		}
+		pub.Close()
+		if n := pub.SubscriptionCount(); n != 0 {
+			t.Errorf("n = %d; want 0", n)
+		}
+	})
 }
