@@ -4,17 +4,17 @@ import (
 	"sync"
 )
 
+type subscriptionCloseFunc func()
+
 type subscription[T any] struct {
-	done    chan struct{}
+	c       subscriptionCloseFunc
 	ev      chan T
 	handler func(v T)
+	mu      sync.Mutex
 }
 
 func (s *subscription[T]) Unsubscribe() {
-	if s.done == nil {
-		return
-	}
-	s.done <- struct{}{}
+	s.c()
 }
 func (s *subscription[T]) listen() {
 	for e := range s.ev {
@@ -24,7 +24,7 @@ func (s *subscription[T]) listen() {
 
 type publisher[T any] struct {
 	subs   []*subscription[T]
-	unsubs chan chan struct{}
+	unsubs chan chan T
 	mu     sync.Mutex
 }
 
@@ -34,7 +34,7 @@ func (p *publisher[T]) listen() {
 		case c := <-p.unsubs:
 			p.mu.Lock()
 			for i, sub := range p.subs {
-				if sub.done == c {
+				if sub.ev == c {
 					p.subs = append(p.subs[:i], p.subs[i+1:]...)
 					break
 				}
@@ -45,18 +45,40 @@ func (p *publisher[T]) listen() {
 }
 
 func NewPublisher[T any]() *publisher[T] {
-	p := &publisher[T]{}
+	p := &publisher[T]{
+		unsubs: make(chan chan T, 5),
+	}
 	go p.listen()
 	return p
 }
 
-func (p *publisher[T]) Subscribe(handler func(v T)) *subscription[T] {
-	done := make(chan struct{})
-	s := subscription[T]{
-		done:    done,
-		handler: handler,
-		ev:      make(chan T),
+type subscribeOpt[T any] func(*subscription[T])
+
+func ChannelCapacity[T any](n int) subscribeOpt[T] {
+	return func(s *subscription[T]) {
+		s.ev = make(chan T, n)
 	}
+}
+
+func (p *publisher[T]) Subscribe(handler func(v T), opts ...subscribeOpt[T]) *subscription[T] {
+	ev := make(chan T)
+	s := subscription[T]{
+		handler: handler,
+		ev:      ev,
+	}
+    for _, opt := range opts {
+        opt(&s)
+    }
+	closer := func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.ev == nil {
+			return
+		}
+		p.unsubs <- s.ev
+	}
+	s.c = closer
+
 	go s.listen()
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -64,9 +86,14 @@ func (p *publisher[T]) Subscribe(handler func(v T)) *subscription[T] {
 	return &s
 }
 func (p *publisher[T]) Close() {
+	if p.subs == nil {
+		return
+	}
 	for _, sub := range p.subs {
 		sub.Unsubscribe()
 	}
+	p.subs = nil
+	close(p.unsubs)
 }
 func (p *publisher[T]) Publish(v T) {
 	p.mu.Lock()

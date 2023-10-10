@@ -1,6 +1,8 @@
 package pubsubdemo
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,7 +29,6 @@ func TestPubsub(t *testing.T) {
 			t.Errorf("got1, got2 = %d, %d; want 1, 1", got1, got2)
 		}
 	})
-
 	t.Run("struct pointer object", func(t *testing.T) {
 		type mystruct struct {
 			a int
@@ -43,4 +44,39 @@ func TestPubsub(t *testing.T) {
 			t.Errorf("m.a = %d; want 1", m.a)
 		}
 	})
+	t.Run("unsubscribe", func(t *testing.T) {
+		var got1, got2 int
+		pub := pubsub.NewPublisher[int]()
+		pub.Subscribe(func(v int) { got1 = v })
+		s := pub.Subscribe(func(v int) { got2 = v })
+		s.Unsubscribe()
+		time.Sleep(10 * time.Millisecond)
+		pub.Publish(1)
+		time.Sleep(10 * time.Millisecond)
+		if got1 != 1 || got2 != 0 {
+			t.Errorf("got1, got2 = %d, %d; want 1, 0", got1, got2)
+		}
+	})
+	t.Run("channel capacity", func(t *testing.T) {
+		var (
+			counter int
+			mu      sync.Mutex
+		)
+		pub := pubsub.NewPublisher[int]()
+		for i := 0; i < 1000; i++ {
+			pub.Subscribe(func(v int) {
+				mu.Lock()
+				counter++
+				mu.Unlock()
+				time.Sleep(10 * time.Millisecond)
+			})
+		}
+		pub.Publish(1)
+		time.Sleep(25 * time.Millisecond)
+		mu.Lock()
+		if counter != 1000 {
+			t.Errorf("counter = %d; want 10", counter)
+		}
+	})
+
 }
