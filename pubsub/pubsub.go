@@ -4,16 +4,6 @@ import (
 	"sync"
 )
 
-type Publisher[T any] interface {
-	Publish(v T)
-	Subscribe(func(v T)) Subscriber[T]
-	Close()
-}
-
-type Subscriber[T any] interface {
-	Unsubscribe()
-}
-
 type subscription[T any] struct {
 	done    chan struct{}
 	ev      chan T
@@ -54,13 +44,13 @@ func (p *publisher[T]) listen() {
 	}
 }
 
-func NewPublisher[T any]() Publisher[T] {
+func NewPublisher[T any]() *publisher[T] {
 	p := &publisher[T]{}
 	go p.listen()
 	return p
 }
 
-func (p *publisher[T]) Subscribe(handler func(v T)) Subscriber[T] {
+func (p *publisher[T]) Subscribe(handler func(v T)) *subscription[T] {
 	done := make(chan struct{})
 	s := subscription[T]{
 		done:    done,
