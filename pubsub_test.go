@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kvalv/pubsub-demo/pubsub"
+	"github.com/kvalv/prototypes/pubsub"
 )
 
 func TestPubsub(t *testing.T) {

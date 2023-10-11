@@ -1,3 +1,3 @@
-module github.com/kvalv/pubsub-demo
+module github.com/kvalv/prototypes
 
 go 1.21.0
