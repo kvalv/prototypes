@@ -1,3 +1,5 @@
+// Package pubsub provides a simple publish/subscribe implementation using channels.
+// The publisher is safe for concurrent use.
 package pubsub
 
 import (
@@ -5,19 +7,22 @@ import (
 	"sync"
 )
 
-type subscriptionCloseFunc func()
+type subscriberCloseFunc func()
 
 var (
+	// ErrClosed is returned when a publish is attempted on a closed publisher.
 	ErrClosed = errors.New("pubsub: closed")
 )
 
 type subscriber[T any] struct {
-	c       subscriptionCloseFunc
+	c       subscriberCloseFunc
 	ev      chan T
 	handler func(v T)
 	mu      sync.Mutex
+	closed  bool
 }
 
+// Unsubscribe removes the subscription. No more events will be sent to the handler.
 func (s *subscriber[T]) Unsubscribe() {
 	s.c()
 }
@@ -34,6 +39,7 @@ type publisher[T any] struct {
 	closed bool
 }
 
+// listening returns whether the publisher is listening for events.
 func (p *publisher[T]) listening() bool { return p.unsubs != nil }
 
 func (p *publisher[T]) listen() {
@@ -49,19 +55,21 @@ func (p *publisher[T]) listen() {
 	}
 }
 
+// New returns a new publisher.
 func New[T any]() *publisher[T] {
-	p := &publisher[T]{}
-	return p
+	return &publisher[T]{}
 }
 
 type subscribeOpt[T any] func(*subscriber[T])
 
+// ChannelCapacity sets the number of events that can be buffered before blocking.
 func ChannelCapacity[T any](n int) subscribeOpt[T] {
 	return func(s *subscriber[T]) {
 		s.ev = make(chan T, n)
 	}
 }
 
+// Subscribe returns a subscription that triggers the handler function when a value is published.
 func (p *publisher[T]) Subscribe(handler func(v T), opts ...subscribeOpt[T]) *subscriber[T] {
 	ev := make(chan T)
 	s := subscriber[T]{
@@ -79,9 +87,10 @@ func (p *publisher[T]) Subscribe(handler func(v T), opts ...subscribeOpt[T]) *su
 	closer := func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		if s.ev == nil {
+		if s.closed {
 			return
 		}
+		s.closed = true
 		p.unsubs <- s.ev
 	}
 	s.c = closer
@@ -92,7 +101,12 @@ func (p *publisher[T]) Subscribe(handler func(v T), opts ...subscribeOpt[T]) *su
 	p.subs = append(p.subs, &s)
 	return &s
 }
+
+// Close closes the publisher and all subscriptions. If the publisher is already
+// closed, this method does nothing.
 func (p *publisher[T]) Close() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.subs == nil {
 		return
 	}
@@ -105,6 +119,10 @@ func (p *publisher[T]) Close() {
 	}
 	p.closed = true
 }
+
+// Publish publishes a value to all subscribers.
+// If the publisher is closed, ErrClosed is returned. This method is safe for
+// concurrent use.
 func (p *publisher[T]) Publish(v T) error {
 	if p.closed {
 		return ErrClosed
@@ -116,7 +134,9 @@ func (p *publisher[T]) Publish(v T) error {
 	}
 	return nil
 }
-func (p *publisher[T]) SubscriptionCount() int {
+
+// SubscriberCount returns the number of active subscribers.
+func (p *publisher[T]) SubscriberCount() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return len(p.subs)
